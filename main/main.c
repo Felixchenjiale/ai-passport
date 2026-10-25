@@ -746,26 +746,11 @@ static void game_worker(void *argument)
 static void render_worker(void *argument)
 {
     (void)argument;
-    uint32_t frames = 0;
-    uint32_t total_us = 0;
-    uint32_t maximum_us = 0;
     for (;;) {
         // The single-slot queue always yields the newest complete game state.
         // Rendering never shares a mutable state with the 50 Hz game task.
         if (xQueueReceive(s_render_queue, &s_game, pdMS_TO_TICKS(100)) == pdTRUE) {
-            int64_t started = esp_timer_get_time();
             render_ui();
-            uint32_t elapsed = (uint32_t)(esp_timer_get_time() - started);
-            total_us += elapsed;
-            if (elapsed > maximum_us) maximum_us = elapsed;
-            if (++frames >= 100) {
-                ESP_LOGI(TAG, "render avg=%lums max=%lums",
-                         (unsigned long)(total_us / frames / 1000),
-                         (unsigned long)(maximum_us / 1000));
-                frames = 0;
-                total_us = 0;
-                maximum_us = 0;
-            }
         }
         vTaskDelay(pdMS_TO_TICKS(25));
     }
@@ -774,9 +759,7 @@ static void render_worker(void *argument)
 static void on_key(bsp_btn_t button, bsp_btn_ev_t event, void *user)
 {
     (void)user;
-    const bool was_armed = s_key_guard.armed;
     if (key_guard_consume(&s_key_guard, event == BSP_BTN_RELEASE, esp_timer_get_time())) {
-        if (was_armed && !s_key_guard.armed) ESP_LOGI(TAG, "wake key released; input enabled");
         return;
     }
     if (!s_input_ready || !s_input_queue) return;
